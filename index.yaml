@@ -1,0 +1,248 @@
+# Describing how the API is secured
+openapi: "3.0.3"
+
+info:
+  title: Postmanaut Directory
+  description: |
+    ![OpenAPI Logo](https://avatars3.githubusercontent.com/u/16343502?v=3&s=100)
+
+    A demo _API_ to **discover** the **_[OpenAPI Specification](https://www.openapis.org/)_**.
+  version: "1.0"
+
+servers:
+  - description: The base path for all resources 
+    url: /postmanaut-directory/v1 
+
+paths:
+  /postmanauts:
+    get:
+      summary: Search postmanauts
+      description: You can either get the full list of postmanauts or filter them on their name
+      parameters:
+        - name: name
+          in: query
+          required: false
+          description: Partial or complete postmanaut name
+          schema: 
+            type: string
+      responses:
+        200:
+          description: Found postmanauts (the returned list is empty if none found)
+          content:
+            application/json:
+              schema:
+                title: Postmanauts
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    minItems: 0
+                    items:
+                      $ref: "#/components/schemas/Postmanaut"
+              examples:
+                SomePostmanautsFound:
+                  summary: A non empty list of postmanauts
+                  value:
+                    data:
+                      - id: petuniagray
+                        name: Joyce
+                        registrationDate: 2018-01-01
+                        supportLevel: gold
+                        pendingTickets: 1
+                      - id: apihandyman
+                        name: Arnaud
+                        registrationDate: 2022-02-01
+                NoPostmanautFound:
+                  summary: An empty list of postmanauts
+                  value:
+                    data: []
+        401:
+          $ref: "#/components/responses/AuthenticationError"
+        500:
+          $ref: "#/components/responses/UnexpectedError"
+  /postmanauts/{postmanautId}:
+    parameters:
+      - $ref: "#/components/parameters/PostmanautIdPathParameter"
+    get:
+      summary: Read a postmanaut
+      responses:
+        200:
+          description: Postmanaut matching provided `postmanautId`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Postmanaut"
+              examples:
+                PostmanautProvidingSupport:
+                  summary: A postmanaut providing support
+                  value:
+                    id: petuniagray
+                    name: Joyce
+                    registrationDate: 2018-01-01
+                    supportLevel: gold
+                    pendingTickets: 1
+                PostmanautProvidingNoSupport:
+                  summary: A postmanaut providing no support
+                  value:
+                    id: apihandyman
+                    name: Arnaud
+                    registrationDate: 2022-02-01
+        401:
+          $ref: "#/components/responses/AuthenticationError"
+        404:
+          $ref: "#/components/responses/PostmanautNotFoundError"
+        500:
+          $ref: "#/components/responses/UnexpectedError"
+    delete:
+      summary: Delete a postmanaut
+      responses:
+        204:
+          description: Postmanaut matching provided `postmanautId` deleted
+        401:
+          $ref: "#/components/responses/AuthenticationError"
+        404:
+          $ref: "#/components/responses/PostmanautNotFoundError"
+        500:
+          $ref: "#/components/responses/UnexpectedError"
+components:
+  schemas:
+    Id:
+      description: A unique and human readable id
+      type: string
+      pattern: "[a-z0-9]*"
+      minLength: 5
+      maxLength: 30
+    Postmanaut:
+      required:
+        - id
+        - name
+        - registrationDate
+      properties:
+        id: 
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        registrationDate:
+          type: string
+          format: date
+        supportLevel:
+          type: string
+          enum:
+            - bronze
+            - silver
+            - gold
+        pendingTickets:
+          type: integer
+          minimum: 0
+    Errors:
+      required:
+        - errors
+      properties:
+        errors:
+          type: array
+          minItems: 1
+          items:
+            required:
+              - code
+              - message
+            properties:
+              code:
+                type: string
+              message:
+                type: string
+              source:
+                title: ErrorSource
+                required:
+                  - location
+                  - name
+                properties:
+                  location:
+                    type: string
+                    enum:
+                      - path
+                      - query
+                      - body
+                      - header
+                  name:
+                    type: string
+                    description: The name of the property or parameter causing the error
+                  path:
+                    type: string
+                    description: JSON path targeting the source of error (only used when location is `body`)
+  parameters:
+    PostmanautIdPathParameter:
+      name: postmanautId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/Id"
+  responses:
+    PostmanautNotFoundError:
+      description: No postmanaut found for provided `postmanautId`
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Errors"
+          examples:
+            PostmanautNotFoundErrorExample:
+              summary: Invalid postmanaut id
+              value:
+                errors:
+                  - code: invalid
+                    location: path
+                    name: postmanautId
+                    message: Unknown postmanautId
+    UnexpectedError:
+      description: Unexpected error. Consumer may try to send the request again.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Errors"
+          examples:
+            UnexpectedError:
+              summary: An unexpected error
+              value:
+                errors:
+                  - code: unexpected
+                    message: An expected error occurred, you may try again later
+    AuthenticationError:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Errors"
+          examples:
+            MissingTokenError:
+              summary: No Api-Key header
+              description: The header may be missing or its name contains a typo error 
+              value:
+                errors:
+                  - code: required
+                    location: header
+                    name: Api-Key
+                    message: Missing Api-Key header
+            InvalidTokenError:
+              summary: Invalid key in Api-Key header
+              value:
+                errors:
+                  - code: invalid
+                    location: header
+                    name: Api-Key
+                    message: Invalid Api-Key header
+  # The place to put available security schemes
+  # that will be used on operations in "security"
+  securitySchemes:
+    # This key is the one to use in security
+    ApiKey:
+      type: apiKey
+      name: Api-Key
+      in: "header"
+
+# API level security configuration
+# It applies to all operations unless security is redefined locally
+security:
+  - ApiKey: []
